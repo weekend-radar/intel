@@ -1,0 +1,16 @@
+{
+  "_help": "Edit this file to add / remove RSS or Atom sources. Set \"on\": false to disable one. The Action picks changes up on the next run (a push to this file also triggers a run).",
+  "zeroWire": [
+    "https://radar.cloudflare.com/security/zero-wire/rss"
+  ],
+  "feeds": [
+    { "id": "cisa",     "name": "CISA 公告",        "url": "https://www.cisa.gov/cybersecurity-advisories/all.xml", "on": true },
+    { "id": "pan",      "name": "Palo Alto PSIRT",  "url": "https://security.paloaltonetworks.com/rss.xml", "on": true },
+    { "id": "msrc",     "name": "Microsoft MSRC",   "url": "https://api.msrc.microsoft.com/update-guide/rss", "on": true },
+    { "id": "fortinet", "name": "Fortinet PSIRT",   "url": "https://filestore.fortinet.com/fortiguard/rss/ir.xml", "on": true },
+    { "id": "cisco",    "name": "Cisco PSIRT",      "url": "https://sec.cloudapps.cisco.com/security/center/psirtrss20/CiscoSecurityAdvisory.xml", "on": true },
+    { "id": "bleep",    "name": "BleepingComputer", "url": "https://www.bleepingcomputer.com/feed/", "on": true },
+    { "id": "thn",      "name": "The Hacker News",  "url": "https://feeds.feedburner.com/TheHackersNews", "on": true },
+    { "id": "sans",     "name": "SANS ISC",         "url": "https://isc.sans.edu/rssfeed.xml", "on": true }
+  ]
+}
