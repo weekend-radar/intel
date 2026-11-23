@@ -1,0 +1,100 @@
+name: Fetch threat intel & publish
+
+on:
+  schedule:
+    # 08:07 and 20:07 Singapore time (UTC+8) = 00:07 and 12:07 UTC.
+    # The 7-minute offset avoids the busy top of the hour, when GitHub delays scheduled runs the most.
+    - cron: '7 0,12 * * *'
+  workflow_dispatch:          # "Run workflow" button in the Actions tab
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'scripts/**'
+      - 'config/**'
+      - '.github/workflows/fetch-intel.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: intel-publish
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: write          # only used by the keep-alive step at the end
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # Previous snapshot = fallback data when a source is down + "new since last run" flags.
+      - name: Restore previous snapshot
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/prev
+          key: intel-prev-${{ github.run_id }}
+          restore-keys: |
+            intel-prev-
+
+      - name: Fetch intel
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}     # optional – makes the NVD step ~10x faster
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # 1,000 GitHub API requests/hour instead of 60
+          PREV_FILE: .cache/prev/intel.json
+          OUT_FILE: site/data/intel.json
+          FEEDS_FILE: config/feeds.json
+          NVD_DAYS: '14'
+        run: node scripts/fetch-intel.mjs
+
+      - name: Stage site
+        run: |
+          cp index.html site/index.html
+          touch site/.nojekyll
+          mkdir -p .cache/prev
+          cp site/data/intel.json .cache/prev/intel.json
+
+      - name: Save snapshot for the next run
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/prev
+          key: intel-prev-${{ github.run_id }}
+
+      # Handy if you host the page somewhere else (SharePoint / IIS) and just need the JSON.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: intel-json
+          path: site/data/intel.json
+          retention-days: 14
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      # GitHub disables scheduled workflows in public repos after 60 days without repo activity.
+      # Re-enabling the workflow through the API resets that timer.
+      - name: Keep schedule alive
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/fetch-intel.yml/enable"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
