@@ -2367,5 +2367,97 @@
       initialLoad();              // data/intel.json first, browser fallback second
     });
   </script>
+  <script>
+(function () {
+  try {
+    var bar = document.getElementById('feedStatusBar');
+    if (!bar) return;
+    var KEY = 'cb_statusbar_open_v1';
+    var open = false;
+    try { open = localStorage.getItem(KEY) === '1'; } catch (e) { /* storage blocked -> stay collapsed */ }
+
+    // ---- toolbar button (styled like its neighbours, placed just before the 🐞 button) ----
+    var anchor = document.querySelector('button[onclick*="openDebug"]') || document.getElementById('btnFetchLive');
+    if (!anchor || !anchor.parentNode) return;
+    var btn = document.createElement('button');
+    btn.id = 'btnStatusTab';
+    btn.type = 'button';
+    btn.setAttribute('aria-controls', 'feedStatusBar');
+    btn.className = anchor.className;
+    btn.innerHTML =
+      '<span id="stDot" class="w-2 h-2 rounded-full bg-slate-500 inline-block"></span>' +
+      '<span id="stText">数据状态</span>' +
+      '<span id="stZw" style="display:none" class="px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 text-[10px] font-bold">ZW</span>' +
+      '<span id="stChev" class="text-[10px] opacity-70 inline-block transition-transform">▾</span>';
+    if (anchor.id === 'btnFetchLive') anchor.parentNode.insertBefore(btn, anchor.nextSibling);
+    else anchor.parentNode.insertBefore(btn, anchor);
+
+    function applyOpen() {
+      bar.style.display = open ? '' : 'none';
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      document.getElementById('stChev').style.transform = open ? 'rotate(180deg)' : '';
+      btn.title = open ? '收起数据状态' : '展开数据状态（各情报源、更新时间、Zero Wire 筛选）';
+    }
+    btn.addEventListener('click', function () {
+      open = !open;
+      try { localStorage.setItem(KEY, open ? '1' : '0'); } catch (e) { /* ignore */ }
+      applyOpen();
+    });
+
+    // ---- one-glance summary on the button, so nothing is lost while the panel is collapsed ----
+    function summarize() {
+      var dots = { ok: 0, warn: 0, err: 0, loading: 0, idle: 0 };
+      document.querySelectorAll('#feedChips [data-chip] .chip-dot').forEach(function (d) {
+        var c = d.className;
+        if (c.indexOf('bg-rose-500') > -1) dots.err++;
+        else if (c.indexOf('animate-pulse') > -1) dots.loading++;
+        else if (c.indexOf('bg-amber-500') > -1) dots.warn++;
+        else if (c.indexOf('bg-emerald-400') > -1) dots.ok++;
+        else dots.idle++;
+      });
+      var total = dots.ok + dots.warn + dots.err + dots.loading + dots.idle;
+      var snap = (typeof snapshot !== 'undefined') ? snapshot : null;
+      var src = (typeof dataSource !== 'undefined') ? dataSource : '';
+      var origin = (typeof dataOrigin !== 'undefined') ? dataOrigin : '';
+      var ageH = (snap && snap.generatedAt) ? (Date.now() - Date.parse(snap.generatedAt)) / 36e5 : null;
+      var staleFile = origin === 'file' && ageH !== null && ageH > 26;
+      var bad = dots.err + dots.warn;
+
+      var text, color;
+      if (src === 'sample') { text = '示例数据'; color = 'bg-amber-500'; }
+      else if (total === 0 || (dots.loading > 0 && !snap)) { text = '加载中…'; color = 'bg-amber-400 animate-pulse'; }
+      else if (snap && snap.generatedAt) {
+        var age = (typeof ageText === 'function') ? ageText(snap.generatedAt) : '';
+        text = (age || '已更新') + (staleFile ? ' ⚠' : '') + (bad ? ' · ' + bad + ' 项异常' : '');
+        if (dots.ok + dots.warn === 0 && dots.err > 0) color = 'bg-rose-500';
+        else if (bad || staleFile) color = 'bg-amber-500';
+        else color = 'bg-emerald-400';
+      } else { text = '数据状态'; color = dots.err ? 'bg-rose-500' : 'bg-slate-500'; }
+
+      var dot = document.getElementById('stDot'), tx = document.getElementById('stText'), zw = document.getElementById('stZw');
+      if (!dot || !tx || !zw) return;
+      dot.className = 'w-2 h-2 rounded-full inline-block ' + color;
+      tx.textContent = text;
+      var zwOn = (typeof onlyZeroWire !== 'undefined') && onlyZeroWire;
+      zw.style.display = zwOn ? '' : 'none';
+      zw.title = zwOn ? '当前只显示 Zero Wire 相关条目（展开面板可关闭）' : '';
+    }
+
+    // refresh whenever the hidden panel's content changes (chips, label, filter button) + every minute for the age text
+    var mo = new MutationObserver(summarize);
+    var opts = { subtree: true, childList: true, attributes: true, characterData: true };
+    ['feedChips', 'lastUpdatedLabel', 'btnFilterZw'].forEach(function (id) {
+      var el = document.getElementById(id); if (el) mo.observe(el, opts);
+    });
+    setInterval(summarize, 60000);
+
+    applyOpen();
+    summarize();
+  } catch (err) {
+    if (window.console) console.warn('[status-tab patch]', err && err.message);
+  }
+})();
+</script>
+ 
 </body>
 </html>
